@@ -31,16 +31,16 @@ class User(SQLModel, table=True):
 class Post(SQLModel, table=True):
     __tablename__ = "posts"
     id: Optional[int] = Field(default=None, primary_key=True)
-    author_id: int = Field(index=True, foreign_key="users.id")
-    image_url: str                                  # "/static/posts/xxx.jpg"
-    caption: Optional[str] = None
+    author_id: int = Field(foreign_key="users.id", index=True)
+    image_url: Optional[str] = None        # "/static/post_images/xxx.jpg"
+    caption: str                          # 본문
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Comment(SQLModel, table=True):
     __tablename__ = "comments"
     id: Optional[int] = Field(default=None, primary_key=True)
-    post_id: int = Field(index=True, foreign_key="posts.id")
-    author_id: int = Field(index=True, foreign_key="users.id")
+    post_id: int = Field(foreign_key="posts.id", index=True)
+    author_id: int = Field(foreign_key="users.id", index=True)
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
