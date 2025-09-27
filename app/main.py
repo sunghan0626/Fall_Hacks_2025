@@ -8,8 +8,8 @@ import inspect
 from pathlib import Path
 from typing import Optional, Dict, List
 
-# Optional .env loading (doesn't crash if python-dotenv isn't installed)
-try:  # noqa: WPS501
+# Optional .env loading (safe if python-dotenv is missing)
+try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
@@ -24,7 +24,7 @@ from sqlmodel import Session as DBSession, select
 
 # ---------- DB imports (soft) ----------
 try:
-    from .db import engine, init_db, get_session  # Part A style (get_session may exist)
+    from .db import engine, init_db, get_session  # Part A style
 except Exception:
     engine = None  # type: ignore
 
@@ -39,7 +39,7 @@ except Exception:
 
 # ---------- Auth imports (soft) ----------
 try:
-    from .auth import router as auth_router  # Part A might expose a router
+    from .auth import router as auth_router  # Part A may expose a router
 except Exception:
     auth_router = None  # type: ignore
 
@@ -67,7 +67,6 @@ TEMPLATES_DIR = BASE_DIR / "app" / "templates"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Session cookie (Part A used a named cookie)
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "dev-secret-change-me"),
@@ -155,7 +154,7 @@ def wallet_page(request: Request) -> HTMLResponse:
     demo = is_demo(request)
     uid = current_user_id(request)
 
-    # Get user for nav if possible
+    # Fetch a user object for the nav when possible
     user_for_nav = None
     if uid and engine and User:
         try:
@@ -198,7 +197,7 @@ def wallet_page(request: Request) -> HTMLResponse:
 def dex_page(request: Request) -> HTMLResponse:
     demo = is_demo(request)
 
-    # Get user for nav if possible
+    # Fetch user for nav if possible
     user_for_nav = None
     uid = current_user_id(request)
     if uid and engine and User:
