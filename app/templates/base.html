@@ -4,8 +4,6 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>{{ page_title or "SweatMarket" }}</title>
-
-  <!-- Tailwind (HTMX optional; add if you use it) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -24,6 +22,7 @@
       }
     }
   </script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <style>
     .wrap { max-width: 1024px; }
   </style>

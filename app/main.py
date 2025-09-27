@@ -8,6 +8,7 @@ import logging
 from typing import Dict, List
 
 # Optional .env loading (safe if python-dotenv is missing)
+
 try:
     from dotenv import load_dotenv
     load_dotenv()

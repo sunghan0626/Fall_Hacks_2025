@@ -80,6 +80,7 @@ class Tx(SQLModel, table=True):
 
 class Order(SQLModel, table=True):
     __tablename__ = "orders"  # 'order' can be reserved in some DBs
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     side: str                   # 'buy' | 'sell'
