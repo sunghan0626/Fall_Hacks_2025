@@ -1,4 +1,13 @@
 {% extends 'base.html' %}
 {% block content %}
-<!-- Landing: show list of open offers; CTA to create an offer or browse community posts. -->
+  <div class="p-4 border rounded-lg">
+    {% if user %}
+      <h2 class="text-lg font-semibold mb-2">환영합니다, {{user.username}}!</h2>
+      <p>스포츠: {{user.sport or '—'}}, 시간대: {{user.time_window or '—'}}, 지역: {{user.region or '—'}}, 목표: {{user.goal or '—'}}</p>
+      <a href="/profile/edit" class="text-blue-600 underline">프로필 수정하기</a>
+    {% else %}
+      <h2 class="text-lg font-semibold mb-2">SweatMarket 시작하기</h2>
+      <p><a href="/signup" class="text-blue-600 underline">회원가입</a> 후 운동 파트너를 찾아보세요.</p>
+    {% endif %}
+  </div>
 {% endblock %}

@@ -1,4 +1,15 @@
 {% extends 'base.html' %}
 {% block content %}
-<!-- Simple login form: handle, password -> POST /login -->
+  <h2 class="text-lg font-semibold mb-4">로그인</h2>
+  <form method="post" action="/login"></form>
+    <div>
+      <label class="block">Username</label>
+      <input name="username" class="border p-2 w-full" required />
+    </div>
+    <div>
+      <label class="block">Password</label>
+      <input name="password" type="password" required maxlength="128" class="border p-2 w-full" />
+    </div>
+    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Log in</button>
+  </form>
 {% endblock %}

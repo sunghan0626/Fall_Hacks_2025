@@ -1,4 +1,24 @@
 {% extends 'base.html' %}
 {% block content %}
-<!-- Edit profile (sports, timezones, regions, goals) -> POST /profile -->
+  <h2 class="text-lg font-semibold mb-4">프로필 수정</h2>
+  <form method="post" action="/profile/edit">
+    <div>
+      <label class="block">선호 종목 (쉼표로 구분)</label>
+      <input name="sport" value="{{user.sport or ''}}" class="border p-2 w-full"/>
+    </div>
+    <div>
+      <label class="block">시간대</label>
+      <input name="time_window" value="{{user.time_window or ''}}" class="border p-2 w-full"/>
+    </div>
+    <div>
+      <label class="block">지역</label>
+      <input name="region" value="{{user.region or ''}}" class="border p-2 w-full"/>
+    </div>
+    <div>
+      <label class="block">운동 목표</label>
+      <input name="goal" value="{{user.goal or ''}}" class="border p-2 w-full"/>
+    </div>
+    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded">저장</button>
+  </form>
 {% endblock %}
+

@@ -9,3 +9,7 @@ python-multipart
 qrcode[pil]
 shortuuid
 httpx
+
+sqlalchemy
+python-dotenv
+argon2-cffi
