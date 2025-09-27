@@ -1,14 +1,34 @@
 <!doctype html>
-<!-- Base layout (Tailwind CDN + htmx). Add nav links to Home, Offers, Wallet, Market/DEX, Posts, Profile, Login/Logout. -->
 <html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>SweatMarket</title>
-  <!-- TODO (All): include htmx + tailwind cdn scripts -->
+  <!-- Tailwind + htmx -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
-<body>
-  <!-- TODO: top nav -->
+<body class="max-w-2xl mx-auto p-4 font-sans">
+  <!-- Top nav -->
+  <header class="flex justify-between items-center mb-6">
+    <h1 class="text-xl font-bold"><a href="/">🏋️ SweatMarket</a></h1>
+    <nav class="space-x-4">
+      <a href="/">Home</a>
+      <a href="/offers">Offers</a>
+      <a href="/wallet">Wallet</a>
+      <a href="/market">Market</a>
+      <a href="/posts">Posts</a>
+      <a href="/profile/edit">Profile</a>
+      {% if user %}
+        <form method="post" action="/logout" class="inline">
+          <button class="text-red-600">Logout ({{user.username}})</button>
+        </form>
+      {% else %}
+        <a href="/login">Login</a>
+        <a href="/signup">Signup</a>
+      {% endif %}
+    </nav>
+  </header>
   <main>
     {% block content %}{% endblock %}
   </main>

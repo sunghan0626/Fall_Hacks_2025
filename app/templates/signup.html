@@ -1,4 +1,19 @@
 {% extends 'base.html' %}
 {% block content %}
-<!-- Simple signup form: handle, password -> POST /signup -->
+  <h2 class="text-lg font-semibold mb-4">회원가입</h2>
+  <form method="post" action="/signup"></form>
+    <div>
+      <label class="block">Username</label>
+      <input name="username" class="border p-2 w-full" required />
+    </div>
+    <div>
+      <label class="block">Email (optional)</label>
+      <input name="email" type="email" class="border p-2 w-full" />
+    </div>
+    <div>
+      <label class="block">Password</label>
+      <input name="password" type="password" required minlength="6" maxlength="128" class="border p-2 w-full" />
+    </div>
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Create account</button>
+  </form>
 {% endblock %}
