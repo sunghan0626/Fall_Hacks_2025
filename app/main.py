@@ -1,52 +1,33 @@
-# FastAPI app entrypoint.
-# TODO (All):
-# - Wire up Jinja2 templates and StaticFiles mount.
-# - Startup: call init_db().
-# - Routes:
-#   - GET "/" -> landing (shows open offers)
-#   - Auth: GET/POST "/login", "/signup", "/logout"
-#   - Offers: list/new/join ("/offers", "/offers/new", "/offers/{id}/join")
-#   - Session: QR page + confirm ("/session/{sid}", "/session/{sid}/qr.png", POST "/session/{sid}/confirm")
-#   - Wallet: GET "/wallet"
-#   - Profile: GET/POST "/profile"
-#   - Community: GET "/posts", GET/POST "/posts/new", GET "/posts/{pid}", POST "/posts/{pid}/comment"
-#   - DEX: GET "/dex", POST "/dex/new"
-#
-# Owners:
-# - Auth & Profile -> A
-# - Community/Search -> B
-# - Check-in/Geo -> C
-# - Wallet/DEX -> D
-
 # app/main.py
-# FastAPI app entrypoint.
-# -------------------------------
-# Routes overview:
-#   - GET "/" -> landing (shows open offers)
-#   - Auth: GET/POST "/login", "/signup", "/logout"
-#   - Offers: list/new/join
-#   - Session: QR + confirm
-#   - Wallet
-#   - Profile: GET/POST "/profile"
-#   - Community: posts/comments
-#   - DEX
-#
-# Owners:
-#   - Auth & Profile -> A
-#   - Community/Search -> B
-#   - Check-in/Geo -> C
-#   - Wallet/DEX -> D
-# -------------------------------
+"""
+FastAPI application entrypoint for SweatMarket.
 
-import os, logging
+Routes (wired here):
+  - GET "/"                 -> landing (shows user card if logged in)
+  - /login, /signup, /logout, /profile/*  (from auth router)
+  - /chat, /chat/{room_id}, /ws/chat/{room_id} (from chat router)
+  - /posts, /posts/new, /posts/{pid}, /posts/{pid}/comment (from posts router)
+  - GET /health            -> health check
+
+Owners:
+  - Auth & Profile -> A
+  - Community/Search -> B
+  - Check-in/Geo -> C
+  - Wallet/DEX -> D
+"""
+import os
+import logging
 from dotenv import load_dotenv
+
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from .db import init_db
+from .db import init_db, engine
 from .auth import router as auth_router
+from .chat import router as chat_router          # DM(WebSocket)
+from .posts import router as posts_router        # Community Posts
 
 # ------------------- Env & Logging -------------------
 load_dotenv()
@@ -56,41 +37,43 @@ log.info(f"DATABASE_URL={os.getenv('DATABASE_URL')}")
 # ------------------- App Setup -------------------
 app = FastAPI()
 
-# 세션 미들웨어 (쿠키에 uid 저장)
+# Cookie-based session (stores uid)
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "dev-secret"),
     session_cookie="sweatmarket_session",
 )
 
-# 정적 파일 (css/js/img)
+# Static files (css/js/img)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 템플릿
+# Templates
 templates = Jinja2Templates(directory="app/templates")
 
-# 라우터 등록
+# Routers
 app.include_router(auth_router)
+app.include_router(chat_router)    # /chat, /ws/chat/*
+app.include_router(posts_router)   # /posts, /posts/new, ...
 
 # ------------------- Routes -------------------
 @app.get("/")
 def index(request: Request):
-    """Landing page. If logged in, injects current user into template."""
+    """Landing page. If logged in, inject current user into template."""
     uid = request.session.get("uid")
     user = None
     if uid:
-        from .models import User
         from sqlmodel import Session as SQLSession, select
-        from .db import engine
+        from .models import User
         with SQLSession(engine) as s:
             user = s.exec(select(User).where(User.id == uid)).first()
     return templates.TemplateResponse("index.html", {"request": request, "user": user})
 
-# ------------------- Startup -------------------
-@app.on_event("startup")
-def on_startup():
-    init_db()
-
 @app.get("/health")
 def health():
     return {"ok": True}
+
+# ------------------- Startup -------------------
+@app.on_event("startup")
+def on_startup():
+    # Create tables if they don't exist
+    init_db()

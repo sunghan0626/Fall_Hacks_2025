@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="text-xl font-bold mb-4">Community Posts</h2>
+
+<div class="mb-4">
+  {% if user %}
+    <a href="/posts/new" class="bg-purple-600 text-white px-3 py-2 rounded">New Post</a>
+  {% else %}
+    <a href="/login" class="text-blue-600 underline">Log in</a> to post.
+  {% endif %}
+</div>
+
+{% if posts|length == 0 %}
+  <p>No posts yet. Be the first!</p>
+{% else %}
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+    {% for p in posts %}
+      <a href="/posts/{{ p.id }}" class="block">
+        <img src="{{ p.image_url }}" class="w-full aspect-square object-cover rounded border"/>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
