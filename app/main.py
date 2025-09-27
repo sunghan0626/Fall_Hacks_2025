@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import random
 import logging
-from typing import Optional, Dict, List
+from typing import Dict, List
 
 # Optional .env loading (safe if python-dotenv is missing)
 try:

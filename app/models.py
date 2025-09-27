@@ -38,8 +38,8 @@ class Post(SQLModel, table=True):
     __tablename__ = "posts"
     id: Optional[int] = Field(default=None, primary_key=True)
     author_id: int = Field(foreign_key="users.id", index=True)
-    image_url: Optional[str] = None
-    caption: str
+    image_url: Optional[str] = None        # e.g., "/static/post_images/xxx.jpg"
+    caption: str                           # post text
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Comment(SQLModel, table=True):
@@ -64,7 +64,7 @@ class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     room_id: int = Field(foreign_key="chat_rooms.id")
     sender_id: int = Field(foreign_key="users.id")
-    content: str = ""                         # allow empty when image-only
+    content: str = ""                      # allow empty when image-only
     image_url: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -79,7 +79,7 @@ class Tx(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Order(SQLModel, table=True):
-    __tablename__ = "orders"  # 'order' is reserved in some DBs
+    __tablename__ = "orders"  # 'order' can be reserved in some DBs
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     side: str                   # 'buy' | 'sell'
