@@ -71,7 +71,7 @@
     </select>
   </div>
 
-  <!-- Sports -->
+  <!-- Preferred sport -->
   <div>
     <label class="block font-medium mb-1">Preferred sport</label>
     <select name="sport" class="border p-2 w-full" required>
@@ -85,7 +85,7 @@
     <p class="text-xs text-gray-500 mt-1">We can add more sports later.</p>
   </div>
 
-  <!-- Optional existing fields (keep for team) -->
+  <!-- Optional fields for team -->
   <div>
     <label class="block font-medium mb-1">Time window (optional)</label>
     <input name="time_window" value="{{ user.time_window or '' }}" class="border p-2 w-full"/>
@@ -103,12 +103,12 @@
 </form>
 
 <script>
-  // avatar preview
+  // Avatar preview
   const input = document.querySelector('input[name="avatar"]');
   const img = document.getElementById('avatarPreview');
-  if (input) {
+  if (input && img) {
     input.addEventListener('change', (e) => {
-      const f = e.target.files?.[0];
+      const f = e.target.files && e.target.files[0];
       if (f) img.src = URL.createObjectURL(f);
     });
   }

@@ -1,11 +1,10 @@
-# app/main.py — merged Part A + Part D (demo-friendly, passes `user`)
+# app/main.py — Part A baseline + Part D (Wallet/DEX), demo-friendly, user in nav
 
 from __future__ import annotations
 
 import os
 import random
-import inspect
-from pathlib import Path
+import logging
 from typing import Optional, Dict, List
 
 # Optional .env loading (safe if python-dotenv is missing)
@@ -15,246 +14,171 @@ try:
 except Exception:
     pass
 
-from fastapi import FastAPI, Request, Form, Depends
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from sqlmodel import Session as DBSession, select
+from sqlmodel import Session as SQLSession, select
 
-# ---------- DB imports (soft) ----------
+# ---- Project modules
+from .db import init_db, engine
+from .auth import router as auth_router
 try:
-    from .db import engine, init_db, get_session  # Part A style
+    from .chat import router as chat_router  # DM(WebSocket)
 except Exception:
-    engine = None  # type: ignore
+    chat_router = None  # optional
 
-    async def init_db() -> None:  # type: ignore
-        pass
+from .models import User, Tx, Order
 
-    def get_session():  # type: ignore
-        class _Dummy:
-            def get(self, *_a, **_kw):
-                return None
-        return _Dummy()
-
-# ---------- Auth imports (soft) ----------
-try:
-    from .auth import router as auth_router  # Part A may expose a router
-except Exception:
-    auth_router = None  # type: ignore
-
-try:
-    from .auth import COOKIE_NAME, verify_session  # Part D cookie helpers (optional)
-except Exception:
-    COOKIE_NAME = "fitcoin_session"  # type: ignore
-
-    def verify_session(_: str) -> Optional[int]:  # type: ignore
-        return None
-
-# ---------- Models (soft) ----------
-try:
-    from .models import User, Tx, Order  # type: ignore
-except Exception:
-    User = Tx = Order = None  # type: ignore
-
-
+# ---- App setup
+logging.getLogger("uvicorn").info(f"DATABASE_URL={os.getenv('DATABASE_URL')}")
 app = FastAPI(title="SweatMarket")
-
-# ---------- Static & templates (make dirs if missing) ----------
-BASE_DIR = Path(__file__).resolve().parent.parent  # repo root
-STATIC_DIR = BASE_DIR / "static"
-TEMPLATES_DIR = BASE_DIR / "app" / "templates"
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
-TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SECRET_KEY", "dev-secret-change-me"),
+    secret_key=os.getenv("SECRET_KEY", "dev-secret"),
     session_cookie="sweatmarket_session",
 )
 
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
 
-# ---------- DEMO MODE (for Part D) ----------
-# Enabled if DB/models are missing, or env SWEATMARKET_DEMO=1, or ?demo=1
-MOCK_ORDERS: Dict[str, List[Dict[str, int]]] = {"buy": [], "sell": []}
+# ---- Routers
+app.include_router(auth_router)
+if chat_router:
+    app.include_router(chat_router)   # /chat, /ws/chat/*
 
-def seed_mock_orders() -> None:
-    if MOCK_ORDERS["buy"] or MOCK_ORDERS["sell"]:
-        return
-    for p in [96, 98, 100, 101, 103]:
-        MOCK_ORDERS["buy"].append({"price": p, "amount": random.randint(5, 20)})
-    for p in [104, 106, 108, 110]:
-        MOCK_ORDERS["sell"].append({"price": p, "amount": random.randint(5, 20)})
-
-def is_demo(request: Request) -> bool:
-    if os.getenv("SWEATMARKET_DEMO") == "1":
-        return True
-    if request.query_params.get("demo") == "1":
-        return True
-    if engine is None or User is None or Tx is None:
-        return True
-    return False
-
-def current_user_id(request: Request) -> Optional[int]:
-    # Prefer Part-A session
-    try:
-        uid = request.session.get("uid")  # type: ignore[attr-defined]
-        if uid:
-            return int(uid)
-    except Exception:
-        pass
-    # Fallback to Part-D cookie
-    token = request.cookies.get(COOKIE_NAME)
-    return verify_session(token) if token else None  # type: ignore
-
-
-# ---------- startup ----------
+# =========================================================
+#                       Startup
+# =========================================================
 @app.on_event("startup")
-async def _startup() -> None:
-    # Support both sync/async init_db
-    if inspect.iscoroutinefunction(init_db):   # type: ignore
-        await init_db()                        # type: ignore
-    else:
-        init_db()                              # type: ignore
-    seed_mock_orders()
+def on_startup():
+    init_db()
+    _seed_mock_orders()  # for DEX demo mode
 
-
-# ---------- home (Part A style) ----------
+# =========================================================
+#                       Home (Part A)
+# =========================================================
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, session: DBSession = Depends(get_session)):
-    uid: Optional[int] = None
-    try:
-        uid = request.session.get("uid")
-    except Exception:
-        uid = None
-
+def index(request: Request):
+    uid = request.session.get("uid")
     user = None
-    try:
-        if uid and User is not None and session is not None:
-            user = session.get(User, uid)  # type: ignore
-    except Exception:
-        # Fallback if dependency isn’t a real Session yet
-        if uid and engine is not None and User is not None:
-            with DBSession(engine) as db:  # type: ignore[arg-type]
-                user = db.get(User, uid)   # type: ignore
-
+    if uid:
+        with SQLSession(engine) as s:
+            user = s.exec(select(User).where(User.id == uid)).first()
     return templates.TemplateResponse("index.html", {"request": request, "user": user})
 
+# Health
+@app.get("/health")
+def health():
+    return {"ok": True}
 
-# ---------- include Part-A auth router if present ----------
-if auth_router:
-    app.include_router(auth_router)
-
-
-# ====================== Part D: WALLET ===============================
+# =========================================================
+#                       Part D: Wallet
+# =========================================================
 @app.get("/wallet", response_class=HTMLResponse)
 def wallet_page(request: Request) -> HTMLResponse:
-    demo = is_demo(request)
-    uid = current_user_id(request)
+    uid = request.session.get("uid")
 
-    # Fetch a user object for the nav when possible
+    # user for nav
     user_for_nav = None
-    if uid and engine and User:
-        try:
-            with DBSession(engine) as db:  # type: ignore[arg-type]
-                user_for_nav = db.get(User, uid)  # type: ignore
-        except Exception:
-            user_for_nav = None
+    if uid:
+        with SQLSession(engine) as s:
+            user_for_nav = s.get(User, uid)
 
-    if demo:
-        u = type("U", (), {"coins": 42})()  # demo balance
-        sample = [
+    # DEMO mode if SWEATMARKET_DEMO=1 or ?demo=1
+    if _is_demo(request):
+        demo_user = type("U", (), {"coins": 42})()
+        txs = [
             {"created_at": "now-1h", "kind": "earn",  "amount": 10, "note": "Meetup demo"},
             {"created_at": "now-3h", "kind": "spend", "amount": -3, "note": "Gold Badge"},
             {"created_at": "yesterday", "kind": "bonus", "amount": 5, "note": "Streak"},
         ]
         return templates.TemplateResponse(
             "wallet.html",
-            {"request": request, "u": u, "txs": sample, "demo": True, "user": user_for_nav},
+            {"request": request, "u": demo_user, "txs": txs, "demo": True, "user": user_for_nav},
         )
 
+    # Real path requires login
     if not uid:
         return RedirectResponse("/login", status_code=303)
-    if engine is None or User is None or Tx is None:
-        return HTMLResponse("<h2>Wallet</h2><p>DB/models not ready.</p>", status_code=200)
 
-    with DBSession(engine) as db:  # type: ignore[arg-type]
-        u = db.get(User, uid)  # type: ignore
+    with SQLSession(engine) as s:
+        u = s.get(User, uid)
         if not u:
             return HTMLResponse("<h2>Wallet</h2><p>User not found.</p>", status_code=404)
-        txs = db.exec(select(Tx).where(Tx.user_id == uid).order_by(Tx.id.desc())).all()  # type: ignore
+        txs = s.exec(select(Tx).where(Tx.user_id == uid).order_by(Tx.id.desc())).all()
 
     return templates.TemplateResponse(
         "wallet.html",
         {"request": request, "u": u, "txs": txs, "demo": False, "user": u},
     )
 
+# =========================================================
+#                       Part D: DEX
+# =========================================================
+_MOCK_ORDERS: Dict[str, List[Dict[str, int]]] = {"buy": [], "sell": []}
 
-# ======================= Part D: DEX ================================
+def _seed_mock_orders() -> None:
+    if _MOCK_ORDERS["buy"] or _MOCK_ORDERS["sell"]:
+        return
+    for p in [96, 98, 100, 101, 103]:
+        _MOCK_ORDERS["buy"].append({"price": p, "amount": random.randint(5, 20)})
+    for p in [104, 106, 108, 110]:
+        _MOCK_ORDERS["sell"].append({"price": p, "amount": random.randint(5, 20)})
+
+def _is_demo(request: Request) -> bool:
+    return os.getenv("SWEATMARKET_DEMO") == "1" or request.query_params.get("demo") == "1"
+
 @app.get("/dex", response_class=HTMLResponse)
 def dex_page(request: Request) -> HTMLResponse:
-    demo = is_demo(request)
-
-    # Fetch user for nav if possible
+    uid = request.session.get("uid")
     user_for_nav = None
-    uid = current_user_id(request)
-    if uid and engine and User:
-        try:
-            with DBSession(engine) as db:  # type: ignore[arg-type]
-                user_for_nav = db.get(User, uid)  # type: ignore
-        except Exception:
-            user_for_nav = None
+    if uid:
+        with SQLSession(engine) as s:
+            user_for_nav = s.get(User, uid)
 
-    if demo:
-        buys = sorted(MOCK_ORDERS["buy"], key=lambda o: o["price"], reverse=True)
-        sells = sorted(MOCK_ORDERS["sell"], key=lambda o: o["price"])
+    if _is_demo(request):
+        buys = sorted(_MOCK_ORDERS["buy"], key=lambda o: o["price"], reverse=True)
+        sells = sorted(_MOCK_ORDERS["sell"], key=lambda o: o["price"])
         return templates.TemplateResponse(
             "dex.html",
             {"request": request, "buys": buys, "sells": sells, "demo": True, "user": user_for_nav},
         )
 
-    if engine is None or Order is None:
-        return HTMLResponse("<h2>DEX</h2><p>DB/models not ready.</p>", status_code=200)
-
-    with DBSession(engine) as db:  # type: ignore[arg-type]
-        buys = db.exec(select(Order).where(Order.side == "buy").order_by(Order.price.desc())).all()  # type: ignore
-        sells = db.exec(select(Order).where(Order.side == "sell").order_by(Order.price.asc())).all()  # type: ignore
+    # Real path
+    try:
+        with SQLSession(engine) as s:
+            buys = s.exec(select(Order).where(Order.side == "buy").order_by(Order.price.desc())).all()
+            sells = s.exec(select(Order).where(Order.side == "sell").order_by(Order.price.asc())).all()
+    except Exception as e:
+        # Graceful fallback if table missing/other error
+        buys = sorted(_MOCK_ORDERS["buy"], key=lambda o: o["price"], reverse=True)
+        sells = sorted(_MOCK_ORDERS["sell"], key=lambda o: o["price"])
+        return templates.TemplateResponse(
+            "dex.html",
+            {"request": request, "buys": buys, "sells": sells, "demo": True, "user": user_for_nav, "error": str(e)},
+        )
 
     return templates.TemplateResponse(
         "dex.html",
         {"request": request, "buys": buys, "sells": sells, "demo": False, "user": user_for_nav},
     )
 
-
 @app.post("/dex/new")
 def dex_new(request: Request, side: str = Form(...), price: int = Form(...), amount: int = Form(...)) -> RedirectResponse:
-    demo = is_demo(request)
-    uid = current_user_id(request)
-
-    if demo:
+    if _is_demo(request):
         if side not in ("buy", "sell"):
             side = "buy"
-        MOCK_ORDERS[side].append({"price": int(price), "amount": int(amount)})
+        _MOCK_ORDERS[side].append({"price": int(price), "amount": int(amount)})
         return RedirectResponse("/dex?demo=1", status_code=303)
 
+    uid = request.session.get("uid")
     if not uid:
         return RedirectResponse("/login", status_code=303)
-    if engine is None or Order is None:
-        return RedirectResponse("/dex?e=db_not_ready", status_code=303)
 
-    with DBSession(engine) as db:  # type: ignore[arg-type]
-        db.add(Order(user_id=uid, side=side, price=price, amount=amount))  # type: ignore
-        db.commit()
+    with SQLSession(engine) as s:
+        s.add(Order(user_id=uid, side=side, price=price, amount=amount))
+        s.commit()
     return RedirectResponse("/dex", status_code=303)
-
-
-# ---------- health (from Part A) ----------
-@app.get("/health")
-def health():
-    return {"ok": True}
-
-# -------- TODO: Parts B/C will add their routers/routes later --------
-# [B] /posts, /posts/new, /posts/{pid}, /posts/{pid}/comment
-# [C] /offers, /offers/new, /offers/{id}/join, /session/{sid}, /session/{sid}/qr.png, POST /session/{sid}/confirm
